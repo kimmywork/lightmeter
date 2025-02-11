@@ -4,13 +4,13 @@ on:
   push:
     branches:
       - master
-  workflow_dispatch:  # 添加手动触发支持
+  workflow_dispatch:
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
     permissions:
-      contents: write  # 添加写入权限
+      contents: write
     
     steps:
       - name: Checkout repository
@@ -28,11 +28,11 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          PUBLIC_URL: /lightmeter
+          PUBLIC_URL: https://meter.kimmy.fun
 
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
           folder: build
           branch: gh-pages
-          token: ${{ secrets.GITHUB_TOKEN }}  # 使用 GitHub 自动提供的 token
+          token: ${{ secrets.GITHUB_TOKEN }}
