@@ -55,15 +55,6 @@ const Video = styled.video`
   object-fit: cover;
 `;
 
-const ZoomControls = styled.div`
-  position: absolute;
-  bottom: 20px;
-  right: 10px;
-  display: flex;
-  gap: 10px;
-  z-index: 1000;
-`;
-
 const StyledButton = styled(MuiButton)`
   padding: 15px;
   min-width: 50px;
@@ -119,7 +110,7 @@ const App = () => {
       ...style,
       left: '50%',
       top: '50%',
-      transform: `translate(-50%, -50%) scale(${zoom})`
+      transform: `translate(-50%, -50%)`
     };
   };
 
@@ -175,8 +166,6 @@ const App = () => {
 
     return closestSpeed;
   };
-
-  const [zoom, setZoom] = useState(1);
 
   // 添加新的状态
   const { history, addRecord, deleteRecord, clearHistory } = useHistory();
@@ -248,20 +237,18 @@ const App = () => {
 
   const [deferredPrompt, setDeferredPrompt] = useState(null);
   const [showInstallPrompt, setShowInstallPrompt] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
   const [showIOSPrompt, setShowIOSPrompt] = useState(false);
 
   useEffect(() => {
     // 检测是否是 iOS 设备
     const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-    setIsIOS(isIOSDevice);
 
     // 如果是 iOS 设备，检查是否已经安装
     if (isIOSDevice && !window.navigator.standalone) {
       // 使用 localStorage 来控制提示频率
       const lastPrompt = localStorage.getItem('lastIOSPrompt');
       const now = Date.now();
-      if (!lastPrompt || (now - parseInt(lastPrompt)) > 1000 * 60 * 60 * 24) { // 24小时显示一次
+      if (!lastPrompt || (now - parseInt(lastPrompt)) > 1000 * 60 * 60 * 24) {
         setShowIOSPrompt(true);
         localStorage.setItem('lastIOSPrompt', now.toString());
       }
@@ -286,7 +273,7 @@ const App = () => {
     if (!deferredPrompt) return;
     
     deferredPrompt.prompt();
-    const { outcome } = await deferredPrompt.userChoice;
+    await deferredPrompt.userChoice;
     setDeferredPrompt(null);
     setShowInstallPrompt(false);
   };
@@ -309,20 +296,6 @@ const App = () => {
             playsInline
             style={getVideoStyles()}
           />
-          <ZoomControls>
-            <StyledButton
-              variant="contained"
-              onClick={() => setZoom(prev => Math.max(1, prev - 0.2))}
-            >
-              -
-            </StyledButton>
-            <StyledButton
-              variant="contained"
-              onClick={() => setZoom(prev => Math.min(3, prev + 0.2))}
-            >
-              +
-            </StyledButton>
-          </ZoomControls>
         </VideoContainer>
         <Tabs
           value={aspectRatio}
@@ -349,8 +322,8 @@ const App = () => {
               label="测光模式"
               onChange={(e) => setMode(e.target.value)}
             >
-              <MenuItem value="shutter">计算快门速度</MenuItem>
-              <MenuItem value="aperture">计算光圈值</MenuItem>
+              <MenuItem value="shutter">光圈优先</MenuItem>
+              <MenuItem value="aperture">快门优先</MenuItem>
             </Select>
           </FormControl>
 

@@ -9,17 +9,33 @@
       "purpose": "any"
     },
     {
-      "src": "logo.svg",
+      "src": "logo192.svg",
       "type": "image/svg+xml",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "logo.svg",
+      "src": "logo512.svg",
       "type": "image/svg+xml",
       "sizes": "512x512",
       "purpose": "any"
     }
+  ],
+  "screenshots": [
+    {
+      "src": "screenshots/screenshot-wide.png",
+      "sizes": "1340x1024",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Homescreen of Light Meter App"
+    },
+    {
+      "src": "screenshots/screenshot-mobile.png",
+      "sizes": "430x932",
+      "type": "image/png",
+      "label": "Homescreen of Light Meter App"
+    }
+
   ],
   "start_url": ".",
   "display": "standalone",
