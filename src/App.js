@@ -3,14 +3,20 @@ import styled from 'styled-components';
 import { 
   Select, 
   MenuItem, 
-  Button as MuiButton,  // 重命名 Button import
+  Button as MuiButton,
   FormControl, 
   InputLabel,
   Typography,
-  Box
+  Box,
+  IconButton  // 添加这行
 } from '@mui/material';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
 import Logo from './components/Logo';  // 添加这行导入
+// 添加导入
+import HistoryIcon from '@mui/icons-material/History';
+import HistoryDialog from './components/History';
+import { formatShutterSpeed } from './utils/format';
+import { useHistory } from './hooks/useHistory';
 
 const theme = createTheme({
   palette: {
@@ -70,6 +76,7 @@ const Header = styled.div`
   align-items: center;
   gap: 10px;
   margin-bottom: 20px;
+  width: 100%;
 `;
 
 const AppTitle = styled.h1`
@@ -140,24 +147,18 @@ const App = () => {
     return closestSpeed;
   };
 
-  const formatShutterSpeed = (speed) => {
-    if (speed >= 1) {
-      return `${speed}秒`;
-    } else {
-      // 使用精确的分数显示
-      const denominator = Math.round(1/speed);
-      return `1/${denominator}`;
-    }
-  };
-
   const [zoom, setZoom] = useState(1);
+  
+  // 添加新的状态
+  const { history, addRecord, deleteRecord, clearHistory } = useHistory();
+  const [historyOpen, setHistoryOpen] = useState(false);
 
+  // 删除原来的 history 相关代码
   const calculateEV = () => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
     const context = canvas.getContext('2d');
     
-    // 使用整个画面进行测光
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
@@ -182,34 +183,51 @@ const App = () => {
     const calculatedEV = Math.log2(averageLuminance * 100 * calibrationFactor);
     setEv(calculatedEV.toFixed(1));
     
+    let standardShutter, newAperture;
+    
     if (mode === 'shutter') {
-      // 计算快门速度
       const shutterValue = Math.pow(2, -calculatedEV) * (100 / iso) * Math.pow(aperture, 2);
       if (shutterValue <= 0) {
         setShutterSpeed(null);
-      } else {
-        const standardShutter = getStandardShutterSpeed(shutterValue);
-        setShutterSpeed(standardShutter);
+        return;
       }
+      standardShutter = getStandardShutterSpeed(shutterValue);
+      setShutterSpeed(standardShutter);
     } else {
-      // 计算光圈值
       const calculatedAperture = Math.sqrt(shutterSpeed * (100 / iso) * Math.pow(2, calculatedEV));
       const standardApertures = [1.0, 1.2, 1.4, 1.8, 2, 2.8, 4, 5.6, 8, 11, 16, 22];
-      const newAperture = standardApertures.reduce((prev, curr) => {
+      newAperture = standardApertures.reduce((prev, curr) => {
         return Math.abs(Math.log2(curr) - Math.log2(calculatedAperture)) < 
                Math.abs(Math.log2(prev) - Math.log2(calculatedAperture)) ? curr : prev;
       });
       setAperture(newAperture);
     }
-  };
+  
+    // 保存历史记录
+    const newRecord = {
+      timestamp: Date.now(),
+      image: canvas.toDataURL('image/jpeg'),
+      ev: calculatedEV.toFixed(1),
+      mode,
+      iso,
+      aperture: mode === 'shutter' ? aperture : newAperture,
+      shutterSpeed: mode === 'shutter' ? standardShutter : shutterSpeed
+    };
 
-  return (
-    <ThemeProvider theme={theme}>
-      <Container>
-        <Header>
-          <Logo />
-          <AppTitle>测光表</AppTitle>
-        </Header>
+    addRecord(newRecord);
+  };
+  
+return (
+  <ThemeProvider theme={theme}>
+    <Container>
+      <Header>
+        <Logo />
+        <AppTitle>测光表</AppTitle>
+        <div style={{ flexGrow: 1 }} />
+        <IconButton color="inherit" onClick={() => setHistoryOpen(true)}>
+          <HistoryIcon />
+        </IconButton>
+      </Header>
         <VideoContainer>
           <Video 
             ref={videoRef} 
@@ -332,6 +350,13 @@ const App = () => {
             </Typography>
           </Box>
         </Controls>
+        <HistoryDialog 
+          open={historyOpen}
+          onClose={() => setHistoryOpen(false)}
+          history={history}
+          onDelete={deleteRecord}
+          onClear={clearHistory}
+        />
       </Container>
     </ThemeProvider>
   );
