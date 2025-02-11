@@ -3,13 +3,15 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches:
-      - main
+      - master
   workflow_dispatch:  # 添加手动触发支持
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
+    permissions:
+      contents: write  # 添加写入权限
+    
     steps:
       - name: Checkout repository
         uses: actions/checkout@v3
@@ -33,3 +35,4 @@ jobs:
         with:
           folder: build
           branch: gh-pages
+          token: ${{ secrets.GITHUB_TOKEN }}  # 使用 GitHub 自动提供的 token
