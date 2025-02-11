@@ -12,8 +12,16 @@ root.render(
   </React.StrictMode>
 );
 
+serviceWorkerRegistration.register({
+  onSuccess: () => console.log('Service Worker 注册成功'),
+  onUpdate: registration => {
+    console.log('发现新版本');
+    if (registration && registration.waiting) {
+      registration.waiting.postMessage({ type: 'SKIP_WAITING' });
+    }
+  }
+});
 // If you want to start measuring performance in your app, pass a function
 // to log results (for example: reportWebVitals(console.log))
 // or send to an analytics endpoint. Learn more: https://bit.ly/CRA-vitals
 reportWebVitals();
-serviceWorkerRegistration.register()
