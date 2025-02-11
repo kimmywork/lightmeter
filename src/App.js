@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import styled from 'styled-components';
-import { 
-  Select, 
-  MenuItem, 
+import {
+  Select,
+  MenuItem,
   Button as MuiButton,
-  FormControl, 
+  FormControl,
   InputLabel,
   Typography,
-  Box,
+  Box, Tabs, Tab,
   IconButton  // 添加这行
 } from '@mui/material';
 import { createTheme, ThemeProvider } from '@mui/material/styles';
@@ -26,44 +26,41 @@ const theme = createTheme({
 
 const Container = styled.div`
   max-width: 100vw;
-  min-height: 100vh;
-  padding: 20px;
+  height: 100vh;
+  padding: 10px;
   background: #1a1a1a;
   color: white;
-`;
-
-const Video = styled.video`
-  width: 100%;
-  max-width: 500px;
-  border-radius: 10px;
-  transform-origin: center center;
-  object-fit: cover; // 确保视频填充整个容器
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 `;
 
 const VideoContainer = styled.div`
   position: relative;
   width: 100%;
   max-width: 500px;
+  height: 35vh;
   overflow: hidden;
   display: flex;
   justify-content: center;
   align-items: center;
+  margin-bottom: 10px;
+  background: #000;
 `;
-
-const Controls = styled.div`
-  margin-top: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
+const Video = styled.video`
+  position: absolute;
+  transform-origin: center center;
+  border-radius: 10px;
+  object-fit: cover;
 `;
 
 const ZoomControls = styled.div`
   position: absolute;
-  bottom: 20px; // 增加底部间距，避免被 iOS Safari 工具栏遮挡
+  bottom: 20px;
   right: 10px;
   display: flex;
   gap: 10px;
-  z-index: 1000; // 确保按钮可点击
+  z-index: 1000;
 `;
 
 const StyledButton = styled(MuiButton)`
@@ -71,11 +68,21 @@ const StyledButton = styled(MuiButton)`
   min-width: 50px;
 `;
 
+const Controls = styled.div`
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px;
+  background: #1a1a1a;
+  overflow-y: auto;
+`;
+
 const Header = styled.div`
   display: flex;
   align-items: center;
   gap: 10px;
-  margin-bottom: 20px;
+  margin-bottom: 10px;
   width: 100%;
 `;
 
@@ -85,17 +92,38 @@ const AppTitle = styled.h1`
   font-weight: 500;
 `;
 
+// 在 App 组件中添加状态
 const App = () => {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const [iso, setIso] = useState(100);
   const [aperture, setAperture] = useState(2.8);
   const [ev, setEv] = useState(0);
-  const [shutterSpeed, setShutterSpeed] = useState(1/60);
+  const [shutterSpeed, setShutterSpeed] = useState(1 / 60);
   const [mode, setMode] = useState('shutter'); // 'shutter' 或 'aperture' 模式
+  // ... other states ...
+  const [aspectRatio, setAspectRatio] = useState('3:2');
+
+  const getVideoStyles = () => {
+    const ratios = {
+      '1:1': { width: '100vw', height: '100vw', maxWidth: '35vh', maxHeight: '35vh' },
+      '3:2': { width: '100vw', height: '66.67vw', maxWidth: '52.5vh', maxHeight: '35vh' },
+      '4:3': { width: '100vw', height: '75vw', maxWidth: '46.67vh', maxHeight: '35vh' },
+      '16:9': { width: '100vw', height: '56.25vw', maxWidth: '62.22vh', maxHeight: '35vh' }
+    };
+  
+    const style = ratios[aspectRatio] || ratios['3:2'];
+    
+    return {
+      ...style,
+      left: '50%',
+      top: '50%',
+      transform: `translate(-50%, -50%) scale(${zoom})`
+    };
+  };
 
   const standardShutterSpeeds = [
-    1/8000, 1/4000, 1/2000, 1/1000, 1/500, 1/250, 1/125, 1/60, 1/30, 1/15, 1/8, 1/4, 1/2,
+    1 / 8000, 1 / 4000, 1 / 2000, 1 / 1000, 1 / 500, 1 / 250, 1 / 125, 1 / 60, 1 / 30, 1 / 15, 1 / 8, 1 / 4, 1 / 2,
     1, 2, 4, 8, 15, 30
   ];
 
@@ -107,20 +135,20 @@ const App = () => {
         console.log('Orientation lock not supported');
       });
     }
-    
+
     startCamera();
   }, []);
 
   const startCamera = async () => {
     try {
-      const constraints = { 
-        video: { 
+      const constraints = {
+        video: {
           facingMode: 'environment',
           width: { ideal: 1920 },
           height: { ideal: 1080 }
-        } 
+        }
       };
-      
+
       const stream = await navigator.mediaDevices.getUserMedia(constraints);
       const video = videoRef.current;
       video.srcObject = stream;
@@ -134,21 +162,21 @@ const App = () => {
   const getStandardShutterSpeed = (shutterValue) => {
     // 标准快门速度档位（秒）
     const standardSpeeds = [
-      1/8000, 1/4000, 1/2000, 1/1000, 1/500, 1/250, 1/125, 1/60, 1/30, 1/15, 1/8, 1/4, 1/2,
+      1 / 8000, 1 / 4000, 1 / 2000, 1 / 1000, 1 / 500, 1 / 250, 1 / 125, 1 / 60, 1 / 30, 1 / 15, 1 / 8, 1 / 4, 1 / 2,
       1, 2, 4, 8, 15, 30
     ];
-    
+
     // 找到最接近的标准快门速度
     let closestSpeed = standardSpeeds.reduce((prev, curr) => {
-      return Math.abs(Math.log2(curr) - Math.log2(shutterValue)) < 
-             Math.abs(Math.log2(prev) - Math.log2(shutterValue)) ? curr : prev;
+      return Math.abs(Math.log2(curr) - Math.log2(shutterValue)) <
+        Math.abs(Math.log2(prev) - Math.log2(shutterValue)) ? curr : prev;
     });
-    
+
     return closestSpeed;
   };
 
   const [zoom, setZoom] = useState(1);
-  
+
   // 添加新的状态
   const { history, addRecord, deleteRecord, clearHistory } = useHistory();
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -158,33 +186,33 @@ const App = () => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
     const context = canvas.getContext('2d');
-    
+
     context.drawImage(video, 0, 0, canvas.width, canvas.height);
     const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
     const data = imageData.data;
-    
+
     let totalLuminance = 0;
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i] / 255;
       const g = data[i + 1] / 255;
       const b = data[i + 2] / 255;
-      
+
       const rLinear = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
       const gLinear = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
       const bLinear = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
-      
+
       const luminance = 0.2126 * rLinear + 0.7152 * gLinear + 0.0722 * bLinear;
       totalLuminance += luminance;
     }
-    
+
     const averageLuminance = totalLuminance / (data.length / 4);
-    
+
     const calibrationFactor = 12.5;
     const calculatedEV = Math.log2(averageLuminance * 100 * calibrationFactor);
     setEv(calculatedEV.toFixed(1));
-    
+
     let standardShutter, newAperture;
-    
+
     if (mode === 'shutter') {
       const shutterValue = Math.pow(2, -calculatedEV) * (100 / iso) * Math.pow(aperture, 2);
       if (shutterValue <= 0) {
@@ -197,12 +225,12 @@ const App = () => {
       const calculatedAperture = Math.sqrt(shutterSpeed * (100 / iso) * Math.pow(2, calculatedEV));
       const standardApertures = [1.0, 1.2, 1.4, 1.8, 2, 2.8, 4, 5.6, 8, 11, 16, 22];
       newAperture = standardApertures.reduce((prev, curr) => {
-        return Math.abs(Math.log2(curr) - Math.log2(calculatedAperture)) < 
-               Math.abs(Math.log2(prev) - Math.log2(calculatedAperture)) ? curr : prev;
+        return Math.abs(Math.log2(curr) - Math.log2(calculatedAperture)) <
+          Math.abs(Math.log2(prev) - Math.log2(calculatedAperture)) ? curr : prev;
       });
       setAperture(newAperture);
     }
-  
+
     // 保存历史记录
     const newRecord = {
       timestamp: Date.now(),
@@ -216,48 +244,55 @@ const App = () => {
 
     addRecord(newRecord);
   };
-  
-return (
-  <ThemeProvider theme={theme}>
-    <Container>
-      <Header>
-        <Logo />
-        <AppTitle>测光表</AppTitle>
-        <div style={{ flexGrow: 1 }} />
-        <IconButton color="inherit" onClick={() => setHistoryOpen(true)}>
-          <HistoryIcon />
-        </IconButton>
-      </Header>
+
+  return (
+    <ThemeProvider theme={theme}>
+      <Container>
+        <Header>
+          <Logo />
+          <AppTitle>测光表</AppTitle>
+          <div style={{ flexGrow: 1 }} />
+          <IconButton color="inherit" onClick={() => setHistoryOpen(true)}>
+            <HistoryIcon />
+          </IconButton>
+        </Header>
         <VideoContainer>
-          <Video 
-            ref={videoRef} 
-            autoPlay 
+          <Video
+            ref={videoRef}
+            autoPlay
             playsInline
-            style={{ 
-              transform: `scale(${zoom})`,
-              transformOrigin: 'center center'
-            }}
+            style={getVideoStyles()}
           />
           <ZoomControls>
-            <StyledButton 
-              variant="contained" 
+            <StyledButton
+              variant="contained"
               onClick={() => setZoom(prev => Math.max(1, prev - 0.2))}
             >
               -
             </StyledButton>
-            <StyledButton 
-              variant="contained" 
+            <StyledButton
+              variant="contained"
               onClick={() => setZoom(prev => Math.min(3, prev + 0.2))}
             >
               +
             </StyledButton>
           </ZoomControls>
         </VideoContainer>
-
-        <canvas 
-          ref={canvasRef} 
-          style={{ display: 'none' }} 
-          width="300" 
+        <Tabs
+          value={aspectRatio}
+          onChange={(e, newValue) => setAspectRatio(newValue)}
+          centered
+          sx={{ mb: 1 }}
+        >
+          <Tab label="1:1" value="1:1" />
+          <Tab label="3:2" value="3:2" />
+          <Tab label="4:3" value="4:3" />
+          <Tab label="16:9" value="16:9" />
+        </Tabs>
+        <canvas
+          ref={canvasRef}
+          style={{ display: 'none' }}
+          width="300"
           height="300"
         />
         <Controls>
@@ -331,9 +366,9 @@ return (
             </FormControl>
           )}
 
-          <StyledButton 
-            variant="contained" 
-            color="primary" 
+          <StyledButton
+            variant="contained"
+            color="primary"
             onClick={calculateEV}
             fullWidth
           >
@@ -343,14 +378,14 @@ return (
           <Box sx={{ mt: 2 }}>
             <Typography variant="h6">EV: {ev}</Typography>
             <Typography variant="h6">
-              {mode === 'shutter' ? 
+              {mode === 'shutter' ?
                 `快门速度: ${shutterSpeed ? formatShutterSpeed(shutterSpeed) : '无效值'}` :
                 `光圈: f/${aperture.toFixed(1)}`
               }
             </Typography>
           </Box>
         </Controls>
-        <HistoryDialog 
+        <HistoryDialog
           open={historyOpen}
           onClose={() => setHistoryOpen(false)}
           history={history}
