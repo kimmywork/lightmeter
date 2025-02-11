@@ -17,6 +17,7 @@ import HistoryIcon from '@mui/icons-material/History';
 import HistoryDialog from './components/History';
 import { formatShutterSpeed } from './utils/format';
 import { useHistory } from './hooks/useHistory';
+import { Snackbar, Alert } from '@mui/material';  // 添加这行
 
 const theme = createTheme({
   palette: {
@@ -245,6 +246,51 @@ const App = () => {
     addRecord(newRecord);
   };
 
+  const [deferredPrompt, setDeferredPrompt] = useState(null);
+  const [showInstallPrompt, setShowInstallPrompt] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showIOSPrompt, setShowIOSPrompt] = useState(false);
+
+  useEffect(() => {
+    // 检测是否是 iOS 设备
+    const isIOSDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+    setIsIOS(isIOSDevice);
+
+    // 如果是 iOS 设备，检查是否已经安装
+    if (isIOSDevice && !window.navigator.standalone) {
+      // 使用 localStorage 来控制提示频率
+      const lastPrompt = localStorage.getItem('lastIOSPrompt');
+      const now = Date.now();
+      if (!lastPrompt || (now - parseInt(lastPrompt)) > 1000 * 60 * 60 * 24) { // 24小时显示一次
+        setShowIOSPrompt(true);
+        localStorage.setItem('lastIOSPrompt', now.toString());
+      }
+    }
+
+    // Android/Desktop PWA 安装提示
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      
+      // 检查是否已经提示过
+      const lastPrompt = localStorage.getItem('lastInstallPrompt');
+      const now = Date.now();
+      if (!lastPrompt || (now - parseInt(lastPrompt)) > 1000 * 60 * 60 * 24) {
+        setShowInstallPrompt(true);
+        localStorage.setItem('lastInstallPrompt', now.toString());
+      }
+    });
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    setDeferredPrompt(null);
+    setShowInstallPrompt(false);
+  };
+
   return (
     <ThemeProvider theme={theme}>
       <Container>
@@ -392,6 +438,43 @@ const App = () => {
           onDelete={deleteRecord}
           onClear={clearHistory}
         />
+         <Snackbar
+          open={showInstallPrompt}
+          autoHideDuration={15000}
+          onClose={() => setShowInstallPrompt(false)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert
+            severity="info"
+            action={
+              <>
+                <MuiButton color="primary" size="small" onClick={handleInstallClick}>
+                  安装
+                </MuiButton>
+                <MuiButton color="secondary" size="small" onClick={() => setShowInstallPrompt(false)}>
+                  取消
+                </MuiButton>
+              </>
+            }
+          >
+            安装应用到主屏幕以获得更好的体验
+          </Alert>
+        </Snackbar>
+
+        {/* iOS 安装提示 */}
+        <Snackbar
+          open={showIOSPrompt}
+          autoHideDuration={15000}
+          onClose={() => setShowIOSPrompt(false)}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <Alert
+            severity="info"
+            onClose={() => setShowIOSPrompt(false)}
+          >
+            在 Safari 浏览器中，点击分享按钮，然后选择"添加到主屏幕"以安装应用
+          </Alert>
+        </Snackbar>
       </Container>
     </ThemeProvider>
   );
