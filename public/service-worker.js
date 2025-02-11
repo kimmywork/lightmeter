@@ -1,12 +1,18 @@
 /* eslint-disable no-restricted-globals */
 
 const CACHE_NAME = 'lightmeter-v1';
+const OFFLINE_URL = '/offline.html';
+
 const urlsToCache = [
   '/',
   '/index.html',
-  '/static/js/main.chunk.js',
-  '/static/js/bundle.js',
-  '/static/js/vendors~main.chunk.js'
+  '/manifest.json',
+  '/logo.svg',
+  '/logo192.svg',
+  '/logo512.svg',
+  '/static/js/main.js',
+  '/static/css/main.css',
+  OFFLINE_URL
 ];
 
 self.addEventListener('install', (event) => {
@@ -19,7 +25,28 @@ self.addEventListener('install', (event) => {
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request)
-      .then((response) => response || fetch(event.request))
+      .then((response) => {
+        if (response) {
+          return response;
+        }
+        return fetch(event.request)
+          .then((response) => {
+            if (!response || response.status !== 200 || response.type !== 'basic') {
+              return response;
+            }
+            const responseToCache = response.clone();
+            caches.open(CACHE_NAME)
+              .then((cache) => {
+                cache.put(event.request, responseToCache);
+              });
+            return response;
+          })
+          .catch(() => {
+            if (event.request.mode === 'navigate') {
+              return caches.match(OFFLINE_URL);
+            }
+          });
+      })
   );
 });
 
@@ -31,7 +58,6 @@ self.addEventListener('activate', (event) => {
           if (cacheName !== CACHE_NAME) {
             return caches.delete(cacheName);
           }
-          return null;
         })
       );
     })

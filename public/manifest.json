@@ -40,5 +40,11 @@
   "start_url": ".",
   "display": "standalone",
   "theme_color": "#1a1a1a",
-  "background_color": "#1a1a1a"
+  "background_color": "#1a1a1a",
+  "prefer_related_applications": false,
+  "categories": ["utilities", "photography"],
+  "description": "A digital light meter for photographers",
+  "orientation": "portrait",
+  "scope": "/",
+  "offline_enabled": true
 }
