@@ -24,7 +24,7 @@ const DialogHeader = styled.div`
 const HistoryImage = styled.img`
   width: 120px;
   height: 120px;
-  object-fit: cover;
+  object-fit: contain;
   border-radius: 8px;
 `;
 

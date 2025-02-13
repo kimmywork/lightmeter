@@ -18,6 +18,7 @@ import HistoryDialog from './components/History';
 import { formatShutterSpeed } from './utils/format';
 import { useHistory } from './hooks/useHistory';
 import { Snackbar, Alert } from '@mui/material';  // 添加这行
+import ScreenRotationIcon from '@mui/icons-material/ScreenRotation';
 
 const theme = createTheme({
   palette: {
@@ -95,9 +96,15 @@ const App = () => {
   const [mode, setMode] = useState('shutter'); // 'shutter' 或 'aperture' 模式
   // ... other states ...
   const [aspectRatio, setAspectRatio] = useState('3:2');
+  const [isLandscape, setIsLandscape] = useState(false);
 
   const getVideoStyles = () => {
-    const ratios = {
+    const ratios = isLandscape ? {
+      '1:1': { width: '35vh', height: '35vh', maxWidth: '35vh', maxHeight: '35vh' },
+      '3:2': { width: '23vh', height: '35vh', maxWidth: '35vh', maxHeight: '35vh' },
+      '4:3': { width: '26.25vh', height: '35vh', maxWidth: '35vh', maxHeight: '35vh' },
+      '16:9': { width: '19.68vh', height: '35vh', maxWidth: '35vh', maxHeight: '35vh' }
+    } : {
       '1:1': { width: '100vw', height: '100vw', maxWidth: '35vh', maxHeight: '35vh' },
       '3:2': { width: '100vw', height: '66.67vw', maxWidth: '52.5vh', maxHeight: '35vh' },
       '4:3': { width: '100vw', height: '75vw', maxWidth: '46.67vh', maxHeight: '35vh' },
@@ -113,7 +120,44 @@ const App = () => {
       transform: `translate(-50%, -50%)`
     };
   };
-
+  const getVideoActualSize = () => {
+    const video = videoRef.current;
+    if (!video || !video.videoWidth) return { width: 300, height: 300 };
+    
+    const videoRatio = video.videoWidth / video.videoHeight;
+    const ratioValues = {
+      '1:1': 1,
+      '3:2': 1.5,
+      '4:3': 1.33,
+      '16:9': 1.77
+    };
+    
+    const targetRatio = ratioValues[aspectRatio] || 1.5;
+    
+    // 计算实际需要截取的视频区域
+    let sourceWidth, sourceHeight, sourceX, sourceY;
+    
+    if (videoRatio > targetRatio) {
+      // 视频比例更宽，需要在两侧裁剪
+      sourceHeight = video.videoHeight;
+      sourceWidth = video.videoHeight * targetRatio;
+      sourceX = (video.videoWidth - sourceWidth) / 2;
+      sourceY = 0;
+    } else {
+      // 视频比例更窄，需要在上下裁剪
+      sourceWidth = video.videoWidth;
+      sourceHeight = video.videoWidth / targetRatio;
+      sourceX = 0;
+      sourceY = (video.videoHeight - sourceHeight) / 2;
+    }
+    
+    return {
+      width: Math.round(sourceWidth),
+      height: Math.round(sourceHeight),
+      x: Math.round(sourceX),
+      y: Math.round(sourceY)
+    };
+  };
   const standardShutterSpeeds = [
     1 / 8000, 1 / 4000, 1 / 2000, 1 / 1000, 1 / 500, 1 / 250, 1 / 125, 1 / 60, 1 / 30, 1 / 15, 1 / 8, 1 / 4, 1 / 2,
     1, 2, 4, 8, 15, 30
@@ -137,7 +181,13 @@ const App = () => {
         video: {
           facingMode: 'environment',
           width: { ideal: 1920 },
-          height: { ideal: 1080 }
+          height: { ideal: 1080 },
+          // 添加以下约束
+          whiteBalanceMode: 'manual',
+          exposureMode: 'manual',
+          exposureCompensation: 0,
+          brightness: 0,
+          contrast: 1
         }
       };
 
@@ -173,32 +223,54 @@ const App = () => {
 
   // 删除原来的 history 相关代码
   const calculateEV = () => {
-    const canvas = canvasRef.current;
-    const video = videoRef.current;
-    const context = canvas.getContext('2d');
-
-    context.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageData.data;
-
-    let totalLuminance = 0;
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i] / 255;
-      const g = data[i + 1] / 255;
-      const b = data[i + 2] / 255;
-
-      const rLinear = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
-      const gLinear = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
-      const bLinear = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
-
-      const luminance = 0.2126 * rLinear + 0.7152 * gLinear + 0.0722 * bLinear;
-      totalLuminance += luminance;
+    // 添加防抖，等待相机参数稳定
+    if (!videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+      return;
     }
 
-    const averageLuminance = totalLuminance / (data.length / 4);
+    const samples = 5; // 采样次数
+    let totalEV = 0;
 
-    const calibrationFactor = 12.5;
-    const calculatedEV = Math.log2(averageLuminance * 100 * calibrationFactor);
+    const canvas = canvasRef.current;
+  
+    const singleMeasurement = () => {
+      const video = videoRef.current;
+      const {width, height, x, y} = getVideoActualSize();
+      canvas.width = width;
+      canvas.height = height;
+
+      const context = canvas.getContext('2d');
+  
+      context.drawImage(video, x, y, width, height, 0, 0, width, height);
+      const imageData = context.getImageData(0, 0, width, height);
+      const data = imageData.data;
+  
+      let totalLuminance = 0;
+      for (let i = 0; i < data.length; i += 4) {
+
+        const r = data[i] / 255;
+        const g = data[i + 1] / 255;
+        const b = data[i + 2] / 255;
+  
+        const rLinear = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+        const gLinear = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+        const bLinear = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+  
+        const luminance = 0.2126 * rLinear + 0.7152 * gLinear + 0.0722 * bLinear;
+        totalLuminance += luminance;
+      }
+  
+      const averageLuminance = totalLuminance / (data.length / 4);
+      const calibrationFactor = 12.5;
+      return Math.log2(averageLuminance * 100 * calibrationFactor);
+    };
+  
+    // 进行多次采样
+    for (let i = 0; i < samples; i++) {
+      totalEV += singleMeasurement();
+    }
+  
+    const calculatedEV = totalEV / samples;
     setEv(calculatedEV.toFixed(1));
 
     let standardShutter, newAperture;
@@ -296,18 +368,32 @@ const App = () => {
             playsInline
             style={getVideoStyles()}
           />
-        </VideoContainer>
-        <Tabs
-          value={aspectRatio}
-          onChange={(e, newValue) => setAspectRatio(newValue)}
-          centered
-          sx={{ mb: 1 }}
+          <IconButton
+          sx={{
+            position: 'absolute',
+            right: '10px',
+            bottom: '10px',
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            '&:hover': {
+              backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            }
+          }}
+          onClick={() => setIsLandscape(!isLandscape)}
         >
-          <Tab label="1:1" value="1:1" />
-          <Tab label="3:2" value="3:2" />
-          <Tab label="4:3" value="4:3" />
-          <Tab label="16:9" value="16:9" />
-        </Tabs>
+          <ScreenRotationIcon />
+        </IconButton>
+      </VideoContainer>
+      <Tabs
+        value={aspectRatio}
+        onChange={(e, newValue) => setAspectRatio(newValue)}
+        centered
+        sx={{ mb: 1 }}
+      >
+        <Tab label="1:1" value="1:1" />
+        <Tab label={isLandscape ? "2:3" : "3:2"} value="3:2" />
+        <Tab label={isLandscape ? "3:4" : "4:3"} value="4:3" />
+        <Tab label={isLandscape ? "9:16" : "16:9"} value="16:9" />
+      </Tabs>
         <canvas
           ref={canvasRef}
           style={{ display: 'none' }}
