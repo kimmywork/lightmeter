@@ -94,7 +94,6 @@ const App = () => {
   const [ev, setEv] = useState(0);
   const [shutterSpeed, setShutterSpeed] = useState(1 / 60);
   const [mode, setMode] = useState('shutter'); // 'shutter' 或 'aperture' 模式
-  // ... other states ...
   const [aspectRatio, setAspectRatio] = useState('3:2');
   const [isLandscape, setIsLandscape] = useState(false);
 
@@ -182,12 +181,12 @@ const App = () => {
           facingMode: 'environment',
           width: { ideal: 1920 },
           height: { ideal: 1080 },
-          // 添加以下约束
-          whiteBalanceMode: 'manual',
           exposureMode: 'manual',
+          whiteBalance: 'manual',
           exposureCompensation: 0,
           brightness: 0,
-          contrast: 1
+          contrast: 1,
+          frameRate: { ideal: 30 }  // Stable frame rate for consistent readings
         }
       };
 
@@ -223,16 +222,15 @@ const App = () => {
 
   // 删除原来的 history 相关代码
   const calculateEV = () => {
-    // 添加防抖，等待相机参数稳定
-    if (!videoRef.current.readyState === videoRef.current.HAVE_ENOUGH_DATA) {
+    // Fix the readyState check logic (remove the extra negation)
+    if (videoRef.current.readyState !== videoRef.current.HAVE_ENOUGH_DATA) {
       return;
     }
 
-    const samples = 5; // 采样次数
+    const samples = 10; // Increase samples for better accuracy
     let totalEV = 0;
-
     const canvas = canvasRef.current;
-  
+
     const singleMeasurement = () => {
       const video = videoRef.current;
       const {width, height, x, y} = getVideoActualSize();
@@ -240,29 +238,66 @@ const App = () => {
       canvas.height = height;
 
       const context = canvas.getContext('2d');
-  
       context.drawImage(video, x, y, width, height, 0, 0, width, height);
       const imageData = context.getImageData(0, 0, width, height);
       const data = imageData.data;
-  
-      let totalLuminance = 0;
-      for (let i = 0; i < data.length; i += 4) {
 
-        const r = data[i] / 255;
-        const g = data[i + 1] / 255;
-        const b = data[i + 2] / 255;
-  
-        const rLinear = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
-        const gLinear = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
-        const bLinear = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
-  
-        const luminance = 0.2126 * rLinear + 0.7152 * gLinear + 0.0722 * bLinear;
-        totalLuminance += luminance;
+      // Calculate center-weighted metering (giving more importance to the center)
+      const centerWeight = 0.6; // 60% weight to center
+      const centerArea = {
+        x: Math.floor(width * 0.3),
+        y: Math.floor(height * 0.3),
+        width: Math.floor(width * 0.4),
+        height: Math.floor(height * 0.4)
+      };
+
+      let totalLuminance = 0;
+      let pixelCount = 0;
+
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const i = (y * width + x) * 4;
+          
+          // Check if pixel is in center area
+          const isCenter = (
+            x >= centerArea.x && 
+            x <= centerArea.x + centerArea.width &&
+            y >= centerArea.y && 
+            y <= centerArea.y + centerArea.height
+          );
+
+          // Apply center-weighted metering
+          const weight = isCenter ? centerWeight : (1 - centerWeight);
+
+          const r = data[i] / 255;
+          const g = data[i + 1] / 255;
+          const b = data[i + 2] / 255;
+
+          // Convert to linear RGB (gamma correction)
+          const rLinear = r <= 0.03928 ? r / 12.92 : Math.pow((r + 0.055) / 1.055, 2.4);
+          const gLinear = g <= 0.03928 ? g / 12.92 : Math.pow((g + 0.055) / 1.055, 2.4);
+          const bLinear = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
+
+          // Calculate luminance using Rec. 709 coefficients
+          const luminance = (0.2126 * rLinear + 0.7152 * gLinear + 0.0722 * bLinear) * weight;
+          totalLuminance += luminance;
+          pixelCount++;
+        }
       }
-  
-      const averageLuminance = totalLuminance / (data.length / 4);
-      const calibrationFactor = 12.5;
-      return Math.log2(averageLuminance * 100 * calibrationFactor);
+
+      const averageLuminance = totalLuminance / pixelCount;
+      
+      // Adjust calibration factor based on device characteristics
+      const baseCalibrationFactor = 12.5;
+      const deviceBrightnessCompensation = 1.2; // Adjust based on device testing
+      const calibrationFactor = baseCalibrationFactor * deviceBrightnessCompensation;
+
+      // Add highlight and shadow protection
+      const minLuminance = 0.001; // Prevent log2(0)
+      const maxLuminance = 0.95;  // Prevent overexposure
+      const clampedLuminance = Math.max(minLuminance, Math.min(maxLuminance, averageLuminance));
+
+      return Math.log2(clampedLuminance * 100 * calibrationFactor);
     };
   
     // 进行多次采样
